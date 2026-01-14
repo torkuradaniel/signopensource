@@ -9,7 +9,7 @@ import ScreeningStep from "../components/Enrollment/steps/ScreeningStep";
 import SelectTrialStep from "../components/Enrollment/steps/SelectTrialStep";
 import { Banner, Body, Content, Page } from "../components/Enrollment/styles";
 
-const steps = ["Select Trial", "Participant details", "Screening", "Review", "Email Sent", "Done"];
+const steps = ["Select Trial", "Participant details", "Screening", "Review", "Consent", "Tracking"];
 
 const trials = [
   {
@@ -81,13 +81,14 @@ export default function Home() {
     hasCondition: "yes",
     excludedMeds: "no",
   });
-  const [docStatus, setDocStatus] = useState("None");
+  const [docStatus, setDocStatus] = useState("Not started");
   const [showBanner, setShowBanner] = useState(null);
   const [sending, setSending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [documentId, setDocumentId] = useState(null);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [shouldPollStatus, setShouldPollStatus] = useState(true);
 
   const eligible = useMemo(() => {
     const ageValue = Number(screening.age);
@@ -95,9 +96,12 @@ export default function Home() {
   }, [screening]);
 
   const enrollmentStatus = useMemo(() => {
-    if (["Declined", "Expired"].includes(docStatus)) return docStatus;
-    if (["Completed"].includes(docStatus)) return "Signed";
-    if (["Viewed", "Sent", "Sending"].includes(docStatus)) return "Sent";
+    if (["Declined", "Expired", "Voided", "Error", "Rejected"].includes(docStatus)) {
+      return docStatus;
+    }
+    if (docStatus === "Completed") return "Signed";
+    if (["Sent"].includes(docStatus)) return "Sent";
+    if (["Draft", "Uploaded"].includes(docStatus)) return "Ready to sign";
     if (currentStep === 3) return "Ready to sign";
     if (currentStep === 2) return "Screening";
     return "Started";
@@ -117,9 +121,6 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [showBanner]);
 
-  useEffect(() => {
-    if (docStatus === "Completed") setCurrentStep(5);
-  }, [docStatus]);
 
   const handleStartGuardian = () => {
     setCurrentStep(1);
@@ -131,24 +132,42 @@ export default function Home() {
 
   const handleSaveContinue = () => {
     if (!eligible) return;
-    setDocStatus("Draft");
     setCurrentStep(3);
   };
 
+  const POLL_INTERVAL_MS = 60 * 60 * 1000;
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const mapPandaStatus = (status) => {
     switch (status) {
+      case "document.uploaded":
+        return "Uploaded";
+      case "document.error":
+        return "Error";
       case "document.draft":
         return "Draft";
       case "document.sent":
         return "Sent";
       case "document.viewed":
         return "Viewed";
+      case "document.waiting_approval":
+        return "Waiting approval";
+      case "document.rejected":
+        return "Rejected";
+      case "document.approved":
+        return "Approved";
+      case "document.waiting_pay":
+        return "Waiting pay";
+      case "document.paid":
+        return "Paid";
       case "document.completed":
         return "Completed";
+      case "document.voided":
+        return "Voided";
       case "document.declined":
         return "Declined";
+      case "document.external_review":
+        return "External review";
       case "document.expired":
         return "Expired";
       default:
@@ -183,6 +202,18 @@ export default function Home() {
     return data?.status;
   };
 
+  const updateDocStatusFromApi = async (docId) => {
+    const status = await fetchDocumentStatus(docId);
+    const mappedStatus = mapPandaStatus(status);
+    if (mappedStatus) {
+      setDocStatus(mappedStatus);
+    }
+    if (status === "document.error") {
+      setShouldPollStatus(false);
+    }
+    return status;
+  };
+
   const sendDocument = async (docId) => {
     const response = await fetch("/api/pandadoc/send", {
       method: "POST",
@@ -200,7 +231,7 @@ export default function Home() {
     const maxAttempts = 10;
     const delayMs = 1200;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const status = await fetchDocumentStatus(docId);
+      const status = await updateDocStatusFromApi(docId);
       if (status === "document.draft") {
         return true;
       }
@@ -216,6 +247,7 @@ export default function Home() {
     }
     setSending(true);
     setDocStatus("Creating");
+    setShouldPollStatus(true);
     try {
       const created = await createDocument();
       if (!created?.documentId) {
@@ -232,9 +264,14 @@ export default function Home() {
       setDocStatus("Draft");
 
       await sendDocument(created.documentId);
-      setDocStatus("Sent");
-      setShowBanner({ type: "success", message: `Email sent to ${participant.email}.` });
-      setCurrentStep(5);
+      const statusAfterSend = await updateDocStatusFromApi(created.documentId);
+      if (statusAfterSend === "document.sent") {
+        setShowBanner({
+          type: "success",
+          message:
+            "Email sent successfully. You can proceed to give consent by signing the document.",
+        });
+      }
     } catch (error) {
       setShowBanner({
         type: "error",
@@ -259,9 +296,10 @@ export default function Home() {
     if (force) setResendCooldown(0);
     setSending(true);
     setDocStatus("Sending");
+    setShouldPollStatus(true);
     try {
       await sendDocument(documentId);
-      setDocStatus("Sent");
+      await updateDocStatusFromApi(documentId);
       setResendCooldown(30);
       setShowBanner({ type: "success", message: "Email resent." });
     } catch (error) {
@@ -280,14 +318,7 @@ export default function Home() {
       return;
     }
     try {
-      const status = await fetchDocumentStatus(documentId);
-      const mappedStatus = mapPandaStatus(status);
-      if (mappedStatus) {
-        setDocStatus(mappedStatus);
-        if (mappedStatus === "Completed") {
-          setCurrentStep(5);
-        }
-      }
+      await updateDocStatusFromApi(documentId);
     } catch (error) {
       setShowBanner({
         type: "error",
@@ -334,12 +365,27 @@ export default function Home() {
     setIsEditingEmail(false);
     setDocumentId(null);
     setIsCheckingStatus(false);
+    setShouldPollStatus(true);
   };
 
   const handleEmailUpdate = () => {
     setIsEditingEmail(false);
     handleResend(true);
   };
+
+  useEffect(() => {
+    if (!documentId || !shouldPollStatus) return undefined;
+    const pollStatus = async () => {
+      try {
+        await updateDocStatusFromApi(documentId);
+      } catch (error) {
+        // Ignore polling errors to avoid interrupting the flow.
+      }
+    };
+    pollStatus();
+    const interval = setInterval(pollStatus, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [documentId, shouldPollStatus, POLL_INTERVAL_MS]);
 
   const isFilled = (value) => String(value).trim().length > 0;
 
@@ -348,6 +394,35 @@ export default function Home() {
     Object.values(guardian).every(isFilled)
   );
   const canContinueGuardian = participantComplete && guardiansComplete;
+
+  const applicationStatus = useMemo(() => {
+    if (docStatus === "Completed") return "Completed";
+    if (
+      [
+        "Sent"
+      ].includes(docStatus)
+    ) {
+      return "In progress";
+    }
+    if (docStatus === "Draft") return "Submitted";
+    if (currentStep >= 1) return "Started";
+    return "Not started";
+  }, [currentStep, docStatus]);
+
+  const documentationStatus = useMemo(() => {
+    if (docStatus === "Voided") return "Expired";
+    if (docStatus === "Completed") return "Completed";
+    if (docStatus === "Viewed") return "Viewed";
+    if (
+      [
+        "Sent"
+      ].includes(docStatus)
+    ) {
+      return "Sent";
+    }
+    if (docStatus === "Draft") return "Started";
+    return "Not started";
+  }, [docStatus]);
 
   const handleParticipantChange = (field) => (event) => {
     setParticipant((prev) => ({ ...prev, [field]: event.target.value }));
@@ -377,7 +452,7 @@ export default function Home() {
         <ProgressRail
           steps={steps}
           currentStep={currentStep}
-          enrollmentStatus={enrollmentStatus}
+          applicationStatus={applicationStatus}
           docStatus={docStatus}
         />
 
@@ -443,16 +518,21 @@ export default function Home() {
               onToggleEditingEmail={() => setIsEditingEmail((prev) => !prev)}
               onResend={handleResend}
               onRefreshStatus={handleRefreshStatus}
+              onTrackStatus={() => setCurrentStep(5)}
               onEmailChange={handleEmailChange}
               onEmailUpdate={handleEmailUpdate}
-              onRestartScreening={() => setCurrentStep(2)}
             />
           )}
 
           {currentStep === 5 && (
             <DoneStep
               docStatus={docStatus}
+              applicationStatus={applicationStatus}
+              documentationStatus={documentationStatus}
               onBackToTrials={() => setCurrentStep(0)}
+              onRefreshStatus={handleRefreshStatus}
+              onResend={handleResend}
+              onRestartScreening={() => setCurrentStep(2)}
             />
           )}
         </Content>

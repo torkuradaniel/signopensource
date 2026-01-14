@@ -1,6 +1,6 @@
 import { Badge, Callout, Rail, RailCard, RailTitle, StatusLabel, StatusRow, StatusStack, Step, StepDot, StepLabel, Stepper } from "./styles";
 
-export default function ProgressRail({ steps, currentStep, enrollmentStatus, docStatus }) {
+export default function ProgressRail({ steps, currentStep, applicationStatus, docStatus }) {
   return (
     <Rail>
       <RailCard>
@@ -20,7 +20,7 @@ export default function ProgressRail({ steps, currentStep, enrollmentStatus, doc
         <StatusStack>
           <StatusRow>
             <StatusLabel>Application</StatusLabel>
-            <Badge $tone={enrollmentStatus}>{enrollmentStatus}</Badge>
+            <Badge $tone={applicationStatus}>{applicationStatus}</Badge>
           </StatusRow>
           <StatusRow>
             <StatusLabel>Documentation</StatusLabel>

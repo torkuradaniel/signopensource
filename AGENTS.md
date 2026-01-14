@@ -16,7 +16,7 @@ This is a Next.js (pages router) app for a clinical trial enrollment flow. The U
   - Screening: `components/Enrollment/steps/ScreeningStep.js`
   - Review: `components/Enrollment/steps/ReviewStep.js`
   - Email sent: `components/Enrollment/steps/EmailSentStep.js`
-  - Done: `components/Enrollment/steps/DoneStep.js`
+  - Done (status timeline): `components/Enrollment/steps/DoneStep.js`
 
 ## Data captured
 - Participant: name, email, phone, street, city, state, postal code.
@@ -46,13 +46,15 @@ This is a Next.js (pages router) app for a clinical trial enrollment flow. The U
   - Guardian1/Guardian2: guardian emails/names when present
 - Request payload includes participant, guardians, selectedTrial, and recipients.
 - Field mapping is built for participant/guardian/trial fields; can be overridden by supplying `fields`.
+  - Document status in the UI is driven by `/api/pandadoc/status` and polled every 30 minutes.
 
 ## How it works end-to-end
 1. User selects a trial.
 2. User enters participant + guardian info.
 3. User completes screening; if eligible, continues.
 4. User reviews details and creates a PandaDoc document.
-5. App polls status and, once draft, sends the document before completing the flow.
+5. App polls the PandaDoc status (every 60 minutes), waits for `document.draft`, then sends.
+6. Email Sent step shows delivery messaging; user clicks Track Status to view the Done step timeline.
 
 ## Updating this file
 Keep this document in sync with any changes to:

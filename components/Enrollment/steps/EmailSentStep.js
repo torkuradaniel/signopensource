@@ -10,8 +10,6 @@ import {
   Hero,
   HeroPill,
   HeroTitle,
-  InfoNote,
-  InlineButton,
   InlineForm,
   List,
   PrimaryButton,
@@ -23,9 +21,6 @@ import {
   Spinner,
   SuccessNote,
   TextButton,
-  Timeline,
-  TimelineItem,
-  WarningNote,
 } from "../styles";
 
 export default function EmailSentStep({
@@ -38,35 +33,32 @@ export default function EmailSentStep({
   onToggleEditingEmail,
   onResend,
   onRefreshStatus,
+  onTrackStatus,
   onEmailChange,
   onEmailUpdate,
-  onRestartScreening,
 }) {
+  const canTrackStatus = [
+    "Sent",
+    "Viewed",
+    "Completed",
+    "Waiting approval",
+    "Approved",
+    "Waiting pay",
+    "Paid",
+    "External review",
+  ].includes(docStatus);
+
   return (
     <Screen>
       <ScreenHeader>
         <div>
-          <ScreenTitle>Email Sent</ScreenTitle>
-          <ScreenSubtitle>Track delivery and signing progress.</ScreenSubtitle>
+          <ScreenTitle>Consent</ScreenTitle>
+          <ScreenSubtitle>Check your email to consent to the liability waiver.</ScreenSubtitle>
         </div>
         <DocPill>
           Document status: <strong>{docStatus}</strong>
         </DocPill>
       </ScreenHeader>
-
-      <Hero>
-        <div>
-          <HeroTitle>Check your email to sign</HeroTitle>
-          <p>
-            We sent your consent form to {participantEmail || "your email"}. Open the
-            email and follow the secure link to sign.
-          </p>
-        </div>
-        <HeroPill>
-          <span>Document</span>
-          <strong>{docStatus}</strong>
-        </HeroPill>
-      </Hero>
 
       {isCheckingStatus && (
         <Card>
@@ -78,95 +70,25 @@ export default function EmailSentStep({
         </Card>
       )}
 
+         {docStatus === "Sent" && (
+        <SuccessNote>
+          Email sent successfully. You can proceed to give consent by signing the document.
+        </SuccessNote>
+      )}
+
       <Actions>
         <PrimaryButton as="a" href="mailto:" role="button">
           Open email app
         </PrimaryButton>
         <SecondaryButton
           type="button"
-          onClick={onResend}
-          disabled={sending || resendCooldown > 0 || isCheckingStatus}
+          onClick={onTrackStatus}
+          disabled={isCheckingStatus || !canTrackStatus}
         >
-          {sending ? (
-            <>
-              <Spinner aria-hidden="true" />
-              Sending...
-            </>
-          ) : resendCooldown > 0 ? (
-            `Resend in ${resendCooldown}s`
-          ) : (
-            "Resend email"
-          )}
+          Track status
         </SecondaryButton>
-        <GhostButton type="button" onClick={onToggleEditingEmail}>
-          Change email address
-        </GhostButton>
-        <TextButton type="button" onClick={onRefreshStatus}>
-          I already signed — refresh status
-        </TextButton>
       </Actions>
 
-      {isEditingEmail && (
-        <Card>
-          <CardTitle>Update email address</CardTitle>
-          <InlineForm>
-            <Field>
-              <label htmlFor="email-update">New email</label>
-              <input
-                id="email-update"
-                type="email"
-                placeholder="jordan@email.com"
-                value={participantEmail}
-                onChange={onEmailChange}
-              />
-            </Field>
-            <PrimaryButton type="button" onClick={onEmailUpdate}>
-              Update &amp; resend
-            </PrimaryButton>
-          </InlineForm>
-        </Card>
-      )}
-
-      <Card>
-        <CardTitle>Status timeline</CardTitle>
-        <Timeline>
-          {[
-            { label: "Sent", active: ["Sent", "Viewed", "Completed"].includes(docStatus) },
-            { label: "Viewed", active: ["Viewed", "Completed"].includes(docStatus) },
-            { label: "Completed", active: docStatus === "Completed" },
-          ].map((item) => (
-            <TimelineItem key={item.label} data-active={item.active}>
-              <span>{item.label}</span>
-              <small>{item.active ? "Complete" : "Pending"}</small>
-            </TimelineItem>
-          ))}
-        </Timeline>
-        {docStatus === "Viewed" && (
-          <InfoNote>We noticed you opened the document.</InfoNote>
-        )}
-        {docStatus === "Completed" && (
-          <SuccessNote>
-            Consent completed. You can continue to the Done step.
-          </SuccessNote>
-        )}
-        {docStatus === "Declined" && (
-          <WarningNote>
-            The participant declined the document. Contact the study team or restart the
-            enrollment flow.
-            <InlineButton type="button" onClick={onRestartScreening}>
-              Restart screening
-            </InlineButton>
-          </WarningNote>
-        )}
-        {docStatus === "Expired" && (
-          <WarningNote>
-            The link expired. Request a new email to continue.
-            <InlineButton type="button" onClick={onResend}>
-              Request a new email
-            </InlineButton>
-          </WarningNote>
-        )}
-      </Card>
 
       <Grid>
         <Card>
@@ -174,7 +96,6 @@ export default function EmailSentStep({
           <List>
             <li>Check spam or junk folders.</li>
             <li>Verify the email address is correct.</li>
-            <li>Use the resend button above after the cooldown.</li>
             <li>Contact the study team if still missing.</li>
           </List>
         </Card>
