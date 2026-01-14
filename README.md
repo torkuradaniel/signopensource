@@ -1,6 +1,6 @@
 # Clinical Trial Enrollment
 
-A Next.js (pages router) app that guides participants through trial selection, guardian/participant details, screening, review, and consent delivery. It includes PandaDoc API routes to create, check status, and send consent documents.
+A Next.js (pages router) app that utilises Pandadoc API to build a document signing workflow for participants going through through trial selection. It uses PandaDoc API to create documents, check status, and send liability waiver documents.
 
 ## Features
 - Multi-step enrollment flow with shared header/progress rail.
@@ -34,6 +34,11 @@ The app will be available at the URL printed in the terminal (commonly `http://l
 - Create document: `POST /api/pandadoc/create`
 - Check status: `GET /api/pandadoc/status?documentId=...`
 - Send document: `POST /api/pandadoc/send`
+
+## PandaDoc APIs used
+- Create a document from a template
+- Send a document
+- Get document status
 
 
 ### Default field mapping
